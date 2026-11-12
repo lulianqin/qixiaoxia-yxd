@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# 本地运行数据（SQLite / 上传等）
+yxd-data/
+
+# 本地配置（含密钥与本机绝对路径），入库请用 config.example.json
+yxd/config.json
+
+# 已废弃的自带前端，仅本地留档，历史版本可从 git 取回
+yxd/static_legacy_20261112/

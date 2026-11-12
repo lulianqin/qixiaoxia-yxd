@@ -33,7 +33,10 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "delivery_note": "全国统一从杭州中心仓发货，送货上门，含税含运费（满 3000 元免运费）。",
     "quote_note": "本报价含 6% 增值税及标准送货上门费用；报价有效期 15 天，逾期以重新核价为准。",
     "payment_note": "确认订单后支付 50% 定金安排生产，余款发货前结清。",
-    "integration_key": "yxd-demo-key",
+    # P4：不再内置静态弱密钥。新部署请在 yxd/config.json 里配置 internal_secret
+    # （与 ERP 的 pricing.engine.secret 一致）；存量库 settings.integration_key 需按 P4 清理清单
+    # 由人工改成强随机值（AI 不执行数据库写操作）。
+    "integration_key": "",
 }
 
 CATEGORIES: List[Dict[str, Any]] = [
@@ -1194,13 +1197,10 @@ PRODUCTS: List[Dict[str, Any]] = [
 # 用户
 # ---------------------------------------------------------------------------
 
-DEFAULT_USERS = [
-    {
-        "id": "u-admin", "role": "admin", "username": "admin", "phone": "13900000000",
-        "name": "平台管理员", "password": "admin123", "agent_code": "",
-        "company": "印小单", "default_markup": 0, "enabled": 1,
-    },
-]
+# P4：独立站点已下线，内部接口由 ERP 网关注入 viewer + HMAC 鉴权，
+# 不再需要 yxd 自己的 admin/agent 账号，也不再 seed 任何硬编码弱口令。
+# 存量库中的 users 记录需按 P4 清理清单由人工删除（AI 不执行数据库写操作）。
+DEFAULT_USERS = []
 
 
 # 现有商品默认都是非标计价；标准价商品由后台新建。

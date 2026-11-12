@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""印小单 · 小批量印刷报价系统（零依赖）。
+"""印小单 · 非标计价引擎（零依赖）。
 
 启动：
     python3 server.py
-默认 http://127.0.0.1:8787
+默认 http://127.0.0.1:8787，仅响应 /internal/pricing/*（供 ERP 后端调用）。
+
+配置：复制 config.example.json 为 config.json，可配置 host / port / data_dir /
+internal_secret / legacy_api；环境变量优先级高于配置文件，仅用于本机临时覆盖。
 """
 
 from __future__ import annotations
@@ -12,6 +15,8 @@ from __future__ import annotations
 import csv
 import email
 from email import policy
+import hashlib
+import hmac
 import io
 import json
 import mimetypes
@@ -29,9 +34,31 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
-DATA_DIR = os.environ.get("YXD_DATA_DIR", os.path.join(BASE_DIR, "data"))
+
+# 配置文件（可选）：默认读 yxd/config.json，可用 YXD_CONFIG 指向别的路径。
+# 优先级：环境变量 > config.json > 代码默认值。
+# 正式环境请用 config.json 配置端口/数据目录/内部密钥；环境变量仅用于本机临时覆盖。
+CONFIG_FILE = os.environ.get("YXD_CONFIG") or os.path.join(BASE_DIR, "config.json")
+
+
+def _load_config(path: str) -> Dict[str, Any]:
+    """读取 config.json；文件不存在或格式错误时返回空字典，不阻断启动。"""
+    try:
+        if not os.path.isfile(path):
+            return {}
+        with open(path, "r", encoding="utf-8") as fp:
+            data = json.load(fp)
+        return data if isinstance(data, dict) else {}
+    except Exception as exc:
+        print("[yxd] 配置文件读取失败，改用默认值：%s (%s)" % (path, exc))
+        return {}
+
+
+CONFIG = _load_config(CONFIG_FILE)
+
+DATA_DIR = os.environ.get("YXD_DATA_DIR") or CONFIG.get("data_dir") or os.path.join(BASE_DIR, "data")
 UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")
-DB_PATH = os.environ.get("YXD_DB", os.path.join(DATA_DIR, "mall.db"))
+DB_PATH = os.environ.get("YXD_DB") or CONFIG.get("db_path") or os.path.join(DATA_DIR, "mall.db")
 
 from core import algorithms, formulas, presenters  # noqa: E402
 from core.db import Database, now_str  # noqa: E402
@@ -270,17 +297,9 @@ class Handler(BaseHTTPRequestHandler):
         self.url = urlparse(self.path)
         self.path_only = unquote(self.url.path)
         self.query = {k: v[-1] for k, v in parse_qs(self.url.query).items()}
+        # P4：内部接口不依赖 yxd_session cookie，也不再读 users 表。
+        # 保留属性只为兼容已不可达的旧 /api/* 代码（P4 后可整段删除）。
         self.current_user = None
-        try:
-            cookie = SimpleCookie(self.headers.get("Cookie", ""))
-            if COOKIE in cookie:
-                payload = verify_session(cookie[COOKIE].value, self.db.session_secret())
-                if payload:
-                    user = self.db.user_by_id(payload.get("uid"))
-                    if user and user.get("enabled"):
-                        self.current_user = user
-        except Exception:
-            self.current_user = None
         return True
 
     def body_json(self) -> Dict[str, Any]:
@@ -288,6 +307,8 @@ class Handler(BaseHTTPRequestHandler):
         if length > MAX_BODY:
             raise EngineError("请求体过大")
         raw = self.rfile.read(length) if length else b""
+        # 缓存原始请求体，供 /internal/* 的 HMAC 验签复用（对现有 /api/* 无影响）
+        self._raw_body = raw.decode("utf-8", "replace") if raw else ""
         if not raw:
             return {}
         try:
@@ -342,6 +363,14 @@ class Handler(BaseHTTPRequestHandler):
     # ---------------------------------------------------------------- dispatch
     def _dispatch(self, method: str, head: bool = False):
         try:
+            # P4：默认「纯接口模式」，只响应 /internal/pricing/*（HMAC 签名 + 网关注入 viewer）。
+            # 旧的 /api/*、公开报价页、后台静态页、/uploads/* 全部不可达。
+            # 如需临时回退排查，在 config.json 里设 "legacy_api": true（不应在生产使用）。
+            if self.path_only.startswith("/internal/"):
+                return self.handle_internal(method)
+            legacy = os.environ.get("YXD_LEGACY_API", "").lower() in ("1", "true", "yes") or bool(CONFIG.get("legacy_api"))
+            if not legacy:
+                return self.fail("该服务已切换为内部接口模式（P4）", 404)
             if self.path_only.startswith("/api/"):
                 return self.handle_api(method)
             if self.path_only.startswith("/uploads/"):
@@ -430,6 +459,256 @@ class Handler(BaseHTTPRequestHandler):
             "default_markup": u.get("default_markup", 0),
             "enabled": u.get("enabled", 1),
         }
+
+    # --------------------------------------------------- internal API (ERP BFF)
+    # 仅供 ERP 后端服务端到服务端调用，共用 8787 端口，不对外暴露。
+    # 硬约束：
+    #   1) 产品计价配置由 ERP 随请求传入，绝不读取本地 products / categories 表；
+    #   2) viewer 只取网关注入的签名头，忽略请求体与 yxd_session cookie；
+    #   3) 资料库 / settings 仍来自 db（productConfig 里只有 ID 引用）。
+    def _internal_viewer(self, method: str) -> Optional[str]:
+        # 密钥来源：环境变量（仅本机调试） > config.json 的 internal_secret > 库内 settings.integration_key
+        secret = (os.environ.get("YXD_INTERNAL_SECRET")
+                  or str(CONFIG.get("internal_secret") or "")
+                  or str(self.db.setting("integration_key", "") or ""))
+        if not secret:
+            self.fail("内部接口密钥未配置（config.json 的 internal_secret）", 401)
+            return None
+        ts = self.headers.get("X-YXD-Timestamp") or ""
+        try:
+            delta = abs(int(time.time()) - int(ts))
+        except Exception:
+            delta = 10 ** 9
+        if delta > 300:
+            self.fail("内部请求已过期", 401)
+            return None
+        raw = getattr(self, "_raw_body", "") or ""
+        payload = "%s\n%s\n%s\n%s" % (method, self.path_only, ts, raw)
+        expect = hmac.new(secret.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256).hexdigest()
+        given = self.headers.get("X-YXD-Sign") or ""
+        if not hmac.compare_digest(expect, given):
+            self.fail("内部接口签名不正确", 401)
+            return None
+        viewer = self.headers.get("X-YXD-Viewer") or "customer"
+        if viewer not in ("customer", "agent", "admin"):
+            viewer = "customer"
+        return viewer
+
+    def _internal_product(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        product = body.get("product") or body.get("productConfig") or {}
+        if not isinstance(product, dict) or not product:
+            raise EngineError("缺少产品计价配置 product / productConfig")
+        if not product.get("modes"):
+            product["modes"] = ["overprint"] if product.get("kind") == "overprint" else ["custom"]
+        return product
+
+    def _internal_require_admin(self, viewer: str) -> bool:
+        """内部「写」接口：ERP 侧只有具备 config 权限的角色才会注入 viewer=admin。"""
+        if viewer != "admin":
+            self.fail("内部管理接口需要 admin 权限", 403)
+            return False
+        return True
+
+    def handle_internal(self, method: str):
+        p = self.path_only
+        body = self.body_json()
+        viewer = self._internal_viewer(method)
+        if not viewer:
+            return
+        engine = QuoteEngine(self.db)
+        markup = _num(self.db.setting("direct_markup"), 0.35)
+
+        if p == "/internal/pricing/quote" and method == "POST":
+            product = self._internal_product(body)
+            cfg = body.get("config") or {}
+            quote = None
+            if (product.get("pricing_mode") or "nonstandard") != "standard" and (product.get("source_ids") or []):
+                comp = engine.compare_sources(product, cfg, agent=None, markup=markup)
+                rec = comp.get("recommended") or {}
+                fac = engine.factories.get(rec.get("id")) if rec else None
+                if fac:
+                    quote = engine.quote(product, cfg, agent=None, viewer=viewer, markup=markup, factory=fac)
+                else:
+                    quote = comp.get("base")
+            if quote is None:
+                quote = engine.quote(product, cfg, agent=None, viewer=viewer, markup=markup)
+            return self.ok({"quote": engine.present(quote, viewer)})
+
+        if p == "/internal/pricing/table" and method == "POST":
+            product = self._internal_product(body)
+            table = engine.price_table(product, body.get("config") or {}, None, markup, body.get("quantities"))
+            if viewer == "customer":
+                for row in table.get("rows", []):
+                    row.pop("unit_agent", None)
+                    row.pop("agent", None)
+                    row.pop("cost", None)
+            return self.ok({"table": table})
+
+        if p == "/internal/pricing/libraries" and method == "GET":
+            out = {}
+            for t in ("materials", "presses", "sheets", "processes", "packagings"):
+                out[t] = self.db.list_library(t, only_enabled=True)
+            out["factories"] = self.db.list_factories(include_disabled=False)
+            out["structures"] = formulas.list_structures()
+            out["algorithms"] = algorithms.list_algorithms()
+            return self.ok(out)
+
+        if p == "/internal/pricing/templates" and method == "GET":
+            from core import catalog
+            keys = (
+                "pricing_mode", "kind", "modes", "structure", "dim_fields", "formula_params",
+                "bleed", "size_presets", "materials", "default_material", "aux_groups",
+                "colors", "default_colors", "processes", "packagings", "default_packaging",
+                "quantity", "production", "pricing", "source_ids", "logistics", "sample",
+                "overprint_methods", "stock",
+            )
+            tpls = []
+            for prod in catalog.PRODUCTS:
+                if (prod.get("pricing_mode") or "") == "standard":
+                    continue
+                cfg = dict((k, prod[k]) for k in keys if k in prod)
+                tpls.append({
+                    "key": prod.get("id"),
+                    "label": prod.get("name"),
+                    "structure": prod.get("structure"),
+                    "config": cfg,
+                })
+            return self.ok({"templates": tpls})
+
+        # -------- P3：管理类内部接口（ERP 全 Vue 化后由 BFF 代理调用） --------
+        # 写操作统一要求 viewer=admin；ERP 侧由 system:goodsPricing:config 权限决定。
+        lib_tables = ("materials", "presses", "sheets", "processes", "packagings")
+
+        # 全量资料库（含停用项 + 物流默认值），供 ERP 配置向导与资料库页使用。
+        # 注意不含 categories：商品分类主数据只在 ERP 维护。
+        if p == "/internal/pricing/libraries/full" and method == "GET":
+            full = {}
+            for t in lib_tables:
+                full[t] = self.db.list_library(t)
+            full["factories"] = self.db.list_factories()
+            full["structures"] = formulas.list_structures()
+            full["algorithms"] = algorithms.list_algorithms()
+            full["logistics_defaults"] = {
+                "mode": "home",
+                "provider": "统一配送",
+                "warehouse": self.db.setting("warehouse", "杭州中心仓"),
+                "base_fee": _num(self.db.setting("shipping_base"), 10),
+                "per_kg": _num(self.db.setting("shipping_per_kg"), 1.8),
+                "free_over": _num(self.db.setting("free_shipping_over"), 3000),
+                "lead_days": 1,
+                "included": True,
+                "note": self.db.setting("delivery_note", "全国送货上门"),
+            }
+            return self.ok(full)
+
+        m = re.match(r"^/internal/pricing/libraries/([a-z]+)$", p)
+        if m and m.group(1) in lib_tables:
+            table = m.group(1)
+            if method == "GET":
+                return self.ok({"items": self.db.list_library(table)})
+            if method == "POST":
+                if not self._internal_require_admin(viewer):
+                    return
+                item = dict(body.get("item") or body)
+                if not item.get("id"):
+                    item["id"] = new_id("lib-", 10)
+                else:
+                    # save_library 是 INSERT OR REPLACE 整行覆盖，局部提交前必须合并旧对象
+                    old = self.db.get_library(table, item["id"])
+                    if old:
+                        merged = dict(old)
+                        merged.update(item)
+                        item = merged
+                if not item.get("name"):
+                    return self.fail("请填写名称", 400)
+                item.setdefault("enabled", 1)
+                return self.ok({"item": self.db.save_library(table, item)})
+
+        m = re.match(r"^/internal/pricing/libraries/([a-z]+)/([^/]+)$", p)
+        if m and m.group(1) in lib_tables and method == "DELETE":
+            if not self._internal_require_admin(viewer):
+                return
+            table, item_id = m.group(1), m.group(2)
+            used = self._library_in_use(table, item_id)
+            if used:
+                return self.fail("该资料正被商品使用，不能删除：%s" % "、".join(used[:3]), 409)
+            self.db.delete_library(table, item_id)
+            return self.ok({"deleted": item_id})
+
+        if p == "/internal/pricing/settings" and method == "GET":
+            s = self.db.settings()
+            s.pop("session_secret", None)
+            s.pop("integration_key", None)  # 密钥由运维/环境变量管理，不下发前端
+            return self.ok({"settings": s})
+
+        if p == "/internal/pricing/settings" and method in ("POST", "PUT", "PATCH"):
+            if not self._internal_require_admin(viewer):
+                return
+            allowed = {
+                "site_name", "site_slogan", "service_phone", "warehouse",
+                "platform_margin", "direct_markup", "default_agent_markup",
+                "tax_rate", "overhead_rate", "loss_rate", "shipping_base",
+                "shipping_per_kg", "free_shipping_over", "min_order_total",
+                "quote_valid_days", "delivery_note", "quote_note", "payment_note",
+            }
+            str_keys = ("site_name", "site_slogan", "service_phone", "warehouse",
+                        "delivery_note", "quote_note", "payment_note")
+            vals = {}
+            for k, v in body.items():
+                if k not in allowed:
+                    continue
+                if k in str_keys:
+                    vals[k] = str(v)[:500]
+                elif k == "quote_valid_days":
+                    vals[k] = max(1, min(90, _int(v, 15)))
+                else:
+                    vals[k] = max(0, _num(v))
+            self.db.save_settings(vals)
+            s = self.db.settings()
+            s.pop("session_secret", None)
+            s.pop("integration_key", None)
+            return self.ok({"settings": s})
+
+        if p == "/internal/pricing/factories" and method == "GET":
+            return self.ok({"factories": self.db.admin_factories()})
+
+        if p == "/internal/pricing/factories" and method == "POST":
+            if not self._internal_require_admin(viewer):
+                return
+            fac = dict(body.get("factory") or body)
+            if not str(fac.get("name") or "").strip():
+                return self.fail("请填写工厂名称", 400)
+            if not fac.get("id"):
+                fac["id"] = new_id("fac-", 8)
+            else:
+                old = self.db.get_factory(fac["id"])
+                if old:
+                    merged = dict(old)
+                    merged.update(fac)
+                    fac = merged
+            return self.ok({"factory": self.db.save_factory(fac)})
+
+        m = re.match(r"^/internal/pricing/factories/([^/]+)$", p)
+        if m and m.group(1) != "prices" and method == "DELETE":
+            if not self._internal_require_admin(viewer):
+                return
+            ok, msg = self.db.delete_factory(m.group(1))
+            if not ok:
+                return self.fail(msg, 409)
+            return self.ok({"deleted": m.group(1)})
+
+        # 发布前校验：复用后台 _validate_product + 引擎试算（展开/拼版/比价）
+        if p == "/internal/pricing/validate" and method == "POST":
+            draft = body.get("draft") or body.get("product") or {}
+            errs = self._validate_product(draft, active=bool(body.get("active")))
+            try:
+                preview = QuoteEngine(self.db).technical_preview(
+                    draft, body.get("dims"), body.get("material_id"), body.get("qty"))
+            except Exception as e:
+                preview = {"ok": False, "errors": [str(e)]}
+            return self.ok({"errors": errs, "preview": preview})
+
+        return self.fail("接口不存在", 404)
 
     # ----------------------------------------------------------------- router
     def handle_api(self, method: str):
@@ -1332,15 +1611,15 @@ def make_server(host: str = "127.0.0.1", port: int = 8787, db_path: str = DB_PAT
 
 
 def main():
-    port = int(os.environ.get("PORT", "8787"))
-    host = os.environ.get("HOST", "127.0.0.1")
+    port = int(os.environ.get("PORT") or CONFIG.get("port") or 8787)
+    host = os.environ.get("HOST") or CONFIG.get("host") or "127.0.0.1"
     server = make_server(host, port, DB_PATH)
     print("")
-    print("  印小单 · 小批量印刷报价系统")
-    print("  商城  http://%s:%d/" % (host, port))
-    print("  后台  http://%s:%d/#/admin    admin / admin123" % (host, port))
-    print("  代理  http://%s:%d/#/agent    13800000001 / agent123" % (host, port))
+    print("  印小单 · 非标计价引擎（内部接口模式）")
+    print("  监听  http://%s:%d/internal/pricing/*" % (host, port))
+    print("  说明  旧 /api/* 与静态页已下线，页面统一由 ERP 提供")
     print("  数据  %s" % DB_PATH)
+    print("  配置  %s%s" % (CONFIG_FILE, "" if os.path.isfile(CONFIG_FILE) else "（未找到，使用默认值）"))
     print("")
     try:
         server.serve_forever()

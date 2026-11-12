@@ -1,0 +1,7 @@
+{
+  "host": "127.0.0.1",
+  "port": 8787,
+  "data_dir": "E:/yinxia/报价器/qixiaoxia-yxd/yxd-data",
+  "internal_secret": "请替换为与 ERP pricing.engine.secret 完全一致的强随机值",
+  "legacy_api": false
+}
