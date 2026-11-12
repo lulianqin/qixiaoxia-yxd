@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="320" viewBox="0 0 480 320">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#faf5ea"/><stop offset="1" stop-color="#eee3d1"/></linearGradient>
+  <filter id="sh"><feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#4a3520" flood-opacity=".16"/></filter>
+</defs>
+<rect width="480" height="320" rx="24" fill="url(#bg)"/>
+<circle cx="360" cy="90" r="86" fill="#b8893f" opacity=".07"/>
+<g transform="translate(230,70) scale(0.85)"><ellipse cx="0" cy="186" rx="82.8" ry="24" fill="#5a442c" opacity=".16" filter="url(#soft)"/><path d="M-90.0 0 L90.0 0 L100.0 160 L-100.0 160 Z" fill="#f4ecdd" filter="url(#shadow)"/><path d="M56.0 0 L90.0 0 L100.0 160 L66.0 160 Z" fill="#cbb89a" opacity=".55"/><path d="M-94.0 -18 L94.0 -18 L90.0 8 L-90.0 8 Z" fill="#fffaf0"/><path d="M-94.0 -18 L94.0 -18" stroke="#cbb89a" stroke-opacity=".35"/><path d="M-46.800000000000004 -6 C-46.800000000000004 -74 -19.8 -96 -5.3999999999999995 -96 C7.2 -96 18.0 -74 18.0 -6" stroke="#b8893f" stroke-width="7" fill="none" stroke-linecap="round"/><path d="M-34.2 -6 C-34.2 -62 -16.2 -82 -3.6 -82 C7.2 -82 14.4 -62 14.4 -6" stroke="#b8893f" stroke-width="7" fill="none" stroke-linecap="round" opacity=".9"/><circle cx="0" cy="50.8" r="34" fill="#c99a3f" opacity=".18"/><text x="0" y="76.8" text-anchor="middle" font-family="PingFang SC, Hiragino Sans GB, Songti SC, serif" font-size="34" fill="#b8893f" letter-spacing="4">A</text><text x="0" y="98.8" text-anchor="middle" font-family="SFMono-Regular, Menlo, monospace" font-size="9" fill="#8d6a2e" letter-spacing="3">FOIL STAMPED</text><rect x="-52" y="102" width="104" height="30" rx="15" fill="#fffaf0" opacity=".55"/><text x="0" y="122" text-anchor="middle" font-family="SFMono-Regular, Menlo, monospace" font-size="9" fill="#cbb89a" letter-spacing="2">100% PAPER</text></g><path d="M320 100 L365 85" stroke="#b8893f" stroke-dasharray="4 4"/>
+<text x="30" y="270" font-family="PingFang SC, Hiragino Sans GB, Songti SC, serif" font-size="22" fill="#493a27" letter-spacing="1">成品烫金</text>
+<text x="30" y="294" font-family="SFMono-Regular, Menlo, monospace" font-size="9" fill="#b8893f" letter-spacing="2">STOCK FOIL</text>
+</svg>

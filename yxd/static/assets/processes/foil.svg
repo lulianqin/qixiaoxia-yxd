@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="320" viewBox="0 0 480 320">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#faf5ea"/><stop offset="1" stop-color="#eee3d1"/></linearGradient>
+  <filter id="sh"><feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#4a3520" flood-opacity=".16"/></filter>
+</defs>
+<rect width="480" height="320" rx="24" fill="url(#bg)"/>
+<circle cx="360" cy="90" r="86" fill="#b8893f" opacity=".07"/>
+<rect x="80" y="62" width="250" height="175" rx="8" fill="#2f2a24" stroke="#5b4a33"/><text x="205" y="175" text-anchor="middle" font-family="PingFang SC, Hiragino Sans GB, Songti SC, serif" font-size="58" fill="#d8b26a" letter-spacing="4">A</text><circle cx="205" cy="150" r="52" fill="none" stroke="#d8b26a" stroke-opacity=".5"/><path d="M340 90 L380 70 M340 120 L390 100" stroke="#d8b26a" stroke-width="3" opacity=".6"/>
+<text x="30" y="270" font-family="PingFang SC, Hiragino Sans GB, Songti SC, serif" font-size="22" fill="#493a27" letter-spacing="1">烫金 / 烫银</text>
+<text x="30" y="294" font-family="SFMono-Regular, Menlo, monospace" font-size="9" fill="#b8893f" letter-spacing="2">FOIL STAMPING</text>
+</svg>

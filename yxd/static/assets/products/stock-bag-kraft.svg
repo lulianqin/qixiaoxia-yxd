@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="640" viewBox="0 0 800 640" fill="none">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#f6f0e4"/><stop offset="1" stop-color="#eadfcd"/>
+  </linearGradient>
+  <radialGradient id="glow" cx="50%" cy="38%" r="62%">
+    <stop offset="0" stop-color="#ffffff" stop-opacity=".85"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+  </radialGradient>
+  <filter id="shadow" x="-30%" y="-30%" width="160%" height="170%">
+    <feDropShadow dx="0" dy="18" stdDeviation="20" flood-color="#4a3826" flood-opacity=".18"/>
+  </filter>
+  <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
+    <feGaussianBlur stdDeviation="6"/>
+  </filter>
+  <pattern id="dots" width="26" height="26" patternUnits="userSpaceOnUse">
+    <circle cx="2" cy="2" r="1.1" fill="#8f7655" opacity=".16"/>
+  </pattern>
+</defs>
+<rect width="800" height="640" fill="url(#bg)"/>
+<rect width="800" height="640" fill="url(#dots)"/>
+<rect width="800" height="640" fill="url(#glow)"/>
+<circle cx="400.0" cy="294.40000000000003" r="217.60000000000002" fill="#ffffff" opacity=".45"/><circle cx="400.0" cy="294.40000000000003" r="172.8" fill="#c4552d" opacity=".07"/><g transform="translate(400,220) scale(1.0)"><ellipse cx="0" cy="336" rx="138.0" ry="24" fill="#5a442c" opacity=".16" filter="url(#soft)"/><path d="M-150.0 0 L150.0 0 L160.0 310 L-160.0 310 Z" fill="#c49a68" filter="url(#shadow)"/><path d="M116.0 0 L150.0 0 L160.0 310 L126.0 310 Z" fill="#8f693f" opacity=".55"/><path d="M-154.0 -18 L154.0 -18 L150.0 8 L-150.0 8 Z" fill="#d8b98d"/><path d="M-154.0 -18 L154.0 -18" stroke="#8f693f" stroke-opacity=".35"/><path d="M-78.0 -6 C-78.0 -74 -33.0 -96 -9.0 -96 C12.0 -96 30.0 -74 30.0 -6" stroke="#7d5a37" stroke-width="7" fill="none" stroke-linecap="round"/><path d="M-57.0 -6 C-57.0 -62 -27.0 -82 -6.0 -82 C12.0 -82 24.0 -62 24.0 -6" stroke="#7d5a37" stroke-width="7" fill="none" stroke-linecap="round" opacity=".9"/><text x="0" y="148.79999999999998" text-anchor="middle" font-family="PingFang SC, Hiragino Sans GB, Songti SC, serif" font-size="30" fill="#8f693f" letter-spacing="4" opacity=".82">YOUR LOGO</text><text x="0" y="168.79999999999998" text-anchor="middle" font-family="SFMono-Regular, Menlo, monospace" font-size="8" fill="#8f693f" letter-spacing="3" opacity=".55">SMALL BATCH</text><rect x="-52" y="252" width="104" height="30" rx="15" fill="#d8b98d" opacity=".55"/><text x="0" y="272" text-anchor="middle" font-family="SFMono-Regular, Menlo, monospace" font-size="9" fill="#8f693f" letter-spacing="2">100% PAPER</text></g><text x="56" y="566" font-family="PingFang SC, Hiragino Sans GB, Songti SC, serif" font-size="22" fill="#5c4a33" letter-spacing="1" text-anchor="start">现货牛皮纸袋 · 加印</text><text x="56" y="594" font-family="PingFang SC, Hiragino Sans GB, Songti SC, serif" font-size="11" fill="#8c7658" letter-spacing="2" text-anchor="start">STOCK BAG · OVERPRINT</text><line x1="56" y1="610" x2="220" y2="610" stroke="#c4552d" stroke-width="2" opacity=".6"/><text x="744" y="594" font-family="PingFang SC, Hiragino Sans GB, Songti SC, serif" font-size="9" fill="#a08a6b" letter-spacing="2" text-anchor="end">YIN XIAO DAN · SMALL BATCH</text></svg>

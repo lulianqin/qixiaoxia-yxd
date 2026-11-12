@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="320" viewBox="0 0 480 320">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#faf5ea"/><stop offset="1" stop-color="#eee3d1"/></linearGradient>
+  <filter id="sh"><feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#4a3520" flood-opacity=".16"/></filter>
+</defs>
+<rect width="480" height="320" rx="24" fill="url(#bg)"/>
+<circle cx="360" cy="90" r="86" fill="#a86b45" opacity=".07"/>
+<g transform="translate(220,190)"><ellipse cx="0" cy="72.0" rx="133.39999999999998" ry="31.200000000000003" fill="#4a3520" opacity=".16" filter="url(#soft)"/><path d="M-115.0,-18.0 L0,42.0 L0,66.0 L-115.0,57.0 Z" fill="#d3bc98" filter="url(#shadow)"/><path d="M115.0,-18.0 L0,42.0 L0,66.0 L115.0,57.0 Z" fill="#e2cdaa"/><path d="M0,-78.0 L115.0,-18.0 L0,42.0 L-115.0,-18.0 Z" fill="#f0e1c8"/><text x="50.6" y="6.0" text-anchor="middle" font-family="PingFang SC, Hiragino Sans GB, Songti SC, serif" font-size="26" fill="#f0e1c8" opacity=".75" letter-spacing="3" transform="skewY(26)">BOX</text></g><path d="M120 250 L180 230" stroke="#a86b45" stroke-width="3" stroke-dasharray="4 4"/><circle cx="300" cy="240" r="5" fill="#a86b45"/>
+<text x="30" y="270" font-family="PingFang SC, Hiragino Sans GB, Songti SC, serif" font-size="22" fill="#493a27" letter-spacing="1">糊盒</text>
+<text x="30" y="294" font-family="SFMono-Regular, Menlo, monospace" font-size="9" fill="#a86b45" letter-spacing="2">BOX GLUING</text>
+</svg>

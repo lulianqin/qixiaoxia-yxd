@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="460" height="320" viewBox="0 0 460 320">
+<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f7f1e6"/><stop offset="1" stop-color="#ecdfcb"/></linearGradient></defs>
+<rect width="460" height="320" rx="24" fill="url(#bg)"/>
+<circle cx="350" cy="100" r="100" fill="#b8893f" opacity=".08"/>
+<g transform="translate(230,190)"><ellipse cx="0" cy="77.0" rx="145.0" ry="33.800000000000004" fill="#4a3520" opacity=".16" filter="url(#soft)"/><path d="M-125.0,-18.200000000000003 L0,46.8 L0,71.0 L-125.0,61.8 Z" fill="#d3bc98" filter="url(#shadow)"/><path d="M125.0,-18.200000000000003 L0,46.8 L0,71.0 L125.0,61.8 Z" fill="#e2cdaa"/><path d="M0,-83.2 L125.0,-18.200000000000003 L0,46.8 L-125.0,-18.200000000000003 Z" fill="#f0e1c8"/><text x="55.0" y="6.4" text-anchor="middle" font-family="PingFang SC, Hiragino Sans GB, Songti SC, serif" font-size="26" fill="#f0e1c8" opacity=".75" letter-spacing="3" transform="skewY(26)">BOX</text></g>
+<text x="30" y="280" font-family="PingFang SC, Hiragino Sans GB, Songti SC, serif" font-size="22" fill="#493a27">纸盒包装</text>
+<text x="30" y="302" font-family="SFMono-Regular, Menlo, monospace" font-size="9" fill="#b8893f" letter-spacing="2">SMALL BATCH · YXD</text>
+</svg>
