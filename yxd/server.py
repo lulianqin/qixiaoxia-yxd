@@ -70,6 +70,11 @@ from core.security import (  # noqa: E402
 COOKIE = "yxd_session"
 MAX_BODY = 8 * 1024 * 1024
 
+# 对端主动断开连接（不是服务端故障）：Windows 10053 = ConnectionAbortedError，
+# Linux 104 = ConnectionResetError，写半截管道 = BrokenPipeError。
+# 统一当成「审计噪音」处理：不写 500、不打 traceback。
+CLIENT_DISCONNECT_ERRORS = (BrokenPipeError, ConnectionResetError, ConnectionAbortedError)
+
 
 def _json_default(obj):
     if hasattr(obj, "isoformat"):
@@ -253,6 +258,17 @@ class MallServer(ThreadingHTTPServer):
         self.db = db
         os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+    def handle_error(self, request, client_address):
+        """客户端主动断开不算服务端故障，不打整段 traceback。
+
+        典型场景：ERP 侧重启/热部署、浏览器取消请求、vite 代理中断——
+        连接被对端 RST，Windows 上表现为 ConnectionAbortedError(10053)，
+        Linux 上多为 ConnectionResetError(104)。这类噪音会淹掉真正的报错。
+        """
+        if isinstance(sys.exc_info()[1], CLIENT_DISCONNECT_ERRORS):
+            return
+        super().handle_error(request, client_address)
+
 
 class Handler(BaseHTTPRequestHandler):
     server_version = "YinXiaoDan/1.0"
@@ -320,33 +336,36 @@ class Handler(BaseHTTPRequestHandler):
     # ------------------------------------------------------------------ output
     def send_json(self, data: Any, status: int = 200, cookies: Optional[List[str]] = None):
         raw = json.dumps(data, ensure_ascii=False, default=_json_default).encode("utf-8")
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", str(len(raw)))
-        self.send_header("Cache-Control", "no-store")
-        self.send_header("X-Content-Type-Options", "nosniff")
-        if cookies:
-            for c in cookies:
-                self.send_header("Set-Cookie", c)
-        self.end_headers()
+        # 整段包起来：对端在发头/发体的任意时刻断连都会抛（Windows 上是 ConnectionAbortedError），
+        # 一律按「客户端放弃」处理，不再往上抛成 500 + traceback。
         try:
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(raw)))
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            if cookies:
+                for c in cookies:
+                    self.send_header("Set-Cookie", c)
+            self.end_headers()
             self.wfile.write(raw)
-        except BrokenPipeError:
-            pass
+        except CLIENT_DISCONNECT_ERRORS:
+            # 对端已关闭（ERP 重启 / 前端取消请求 / 代理中断）：关连接即可
+            self.close_connection = True
 
 
     def download_json(self, data: Any, filename: str):
         raw = json.dumps(data, ensure_ascii=False, default=_json_default).encode("utf-8")
-        self.send_response(200)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Disposition", 'attachment; filename="%s"' % filename)
-        self.send_header("Content-Length", str(len(raw)))
-        self.send_header("Cache-Control", "no-store")
-        self.end_headers()
         try:
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Disposition", 'attachment; filename="%s"' % filename)
+            self.send_header("Content-Length", str(len(raw)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
             self.wfile.write(raw)
-        except BrokenPipeError:
-            pass
+        except CLIENT_DISCONNECT_ERRORS:
+            self.close_connection = True
 
     def ok(self, data: Any = None, status: int = 200, cookies: Optional[List[str]] = None):
         self.send_json({"ok": True, "data": data}, status=status, cookies=cookies)
@@ -382,7 +401,9 @@ class Handler(BaseHTTPRequestHandler):
             return self.serve_file(os.path.join(STATIC_DIR, self.path_only.lstrip("/")))
         except EngineError as e:
             return self.fail(str(e), 400)
-        except BrokenPipeError:
+        except CLIENT_DISCONNECT_ERRORS:
+            # 客户端断开：没有可写的对端，直接关连接（打 500 只会再抛一次）
+            self.close_connection = True
             return
         except Exception as e:
             traceback.print_exc()
@@ -420,8 +441,8 @@ class Handler(BaseHTTPRequestHandler):
         if self.command != "HEAD":
             try:
                 self.wfile.write(raw)
-            except BrokenPipeError:
-                pass
+            except CLIENT_DISCONNECT_ERRORS:
+                self.close_connection = True
 
     # ------------------------------------------------------------------- auth
     def require_admin(self) -> Optional[Dict[str, Any]]:
